@@ -3,6 +3,16 @@
 This project is a from-scratch Python implementation of a self-balancing 2D Interval Tree using Augmented AVL Tree. It is designed to efficiently store and query 2D rectangular regions (e.g., `[x_low, x_high, y_low, y_high]`) for overlaps.
 
 The data structure uses nested AVL trees to maintain balance, ensuring that insertion, deletion, and query operations have a time complexity of **O(log n + k)**, where `n` is the number of intervals stored and `k` is the number of reported overlaps.
+This 2D implementation builds on that by:
+1. Creating a primary Interval Tree based on the **x-intervals** of the rectangles.
+2. For each unique x-interval in the tree, creating a secondary Interval Tree to store all **y-intervals** that share that same x-interval.
+
+## Algorithmic Complexity
+- **Space Complexity:** O(n) - each rectangle stored once
+- **Build Time:** O(n log n) - n insertions, each O(log n)
+- **Query Time (Single Overlap):** O(log n) - search both x and y trees
+- **Query Time (All Overlaps):** O(log n + k) - where k is the number of overlaps found
+- **Insertion/Deletion:** O(log n) - AVL-balanced trees maintain logarithmic height
 
 ## Features
 
@@ -15,6 +25,19 @@ The data structure uses nested AVL trees to maintain balance, ensuring that inse
 - **Visualization Tools:** Comes with utilities to visually inspect the data and the tree structure:
   - `visualize_intervals_2d`: Plots the stored rectangles and a query rectangle using `matplotlib`.
   - `visualize_tree_structure`: Generates a graph of the nested tree structure using `graphviz`.
+
+## Requirements
+
+The core implementation has **no external dependencies**. For visualization and testing, you will need:
+
+- `matplotlib`
+- `graphviz` (both the Python library and the Graphviz system package)
+
+You can install the Python libraries using `pip`:
+
+```bash
+pip install matplotlib graphviz
+```
 
 ## How to Use
 
@@ -47,4 +70,12 @@ print_overlaps(overlaps)
 # Example of deleting an interval
 print("Deleting rectangle [20, 30] × [20, 30]")
 tree.root = tree.delete(tree.root, [20, 30, 20, 30])
+```
+
+## Running Tests
+
+A comprehensive test suite is provided in `test_interval_tree.py`. To run all correctness checks, performance benchmarks, and the stress test, simply execute the file:
+
+```bash
+python test_interval_tree.py
 ```
