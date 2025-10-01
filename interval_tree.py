@@ -48,8 +48,8 @@ class IntervalTree:
     Example:
         tree = IntervalTree()
         tree.update([[0, 10, 0, 10], [5, 15, 5, 15]])
-        tree.findall_overlapping_interval(tree.root, [8, 12, 8, 12])
-        print(f"Found {len(tree.overlaps)} overlaps")
+        overlaps = tree.findall_overlapping(tree.root, [8, 12, 8, 12])
+        print(f"Found {len(overlaps)} overlaps")
     """
 
     def __init__(self, intervals=None):
@@ -60,16 +60,14 @@ class IntervalTree:
             intervals: Optional list of [x_low, x_high, y_low, y_high] intervals
         """
         self.root = None
-        self.overlaps = []
+        self.overlaps = []  # Store results for legacy API compatibility
         if intervals is not None:
             for interval in intervals:
                 self.root = self.insert(self.root, interval)
 
     def get_height(self, node):
         """Get height of node (0 if None)"""
-        if node is None:
-            return 0
-        return node.height
+        return 0 if node is None else node.height
 
     def get_balance(self, node):
         """Get balance factor of node (left height - right height)"""
@@ -93,14 +91,7 @@ class IntervalTree:
             node.max = max(node.max, node.right.max)
 
     def rotate_right(self, z):
-        r"""
-        Right rotation for AVL balancing
-             z                       y
-            / \                     / \
-           y   T4      =>          x   z
-          / \                         / \
-         x   T3                      T3  T4
-        """
+        """Right rotation for AVL balancing"""
         y = z.left
         T3 = y.right
 
@@ -115,14 +106,7 @@ class IntervalTree:
         return y
 
     def rotate_left(self, z):
-        r"""
-        Left rotation for AVL balancing
-           z                           y
-          / \                         / \
-         T1  y          =>           z   x
-            / \                     / \
-           T2  x                   T1  T2
-        """
+        """Left rotation for AVL balancing"""
         y = z.right
         T2 = y.left
 
@@ -290,107 +274,94 @@ class IntervalTree:
 
         return root
 
-    def findall_overlapping_interval(self, root, i):
+    def findall_overlapping(self, root, query):
         """
         Find all intervals overlapping with query interval
 
         Args:
             root: Root of tree
-            i: Query interval [x_low, x_high, y_low, y_high]
+            query: Query interval [x_low, x_high, y_low, y_high]
 
         Returns:
-            List of overlapping intervals (stored in self.overlaps)
+            List of overlapping intervals as (x_interval, y_interval) tuples
         """
-        self.overlaps = []
-        return self._findall_overlapping_interval_helper(root, i)
+        overlaps = []
+        self._findall_overlapping_helper(root, query, overlaps)
+        return overlaps
 
-    def _findall_overlapping_interval_helper(self, root, i):
+    def _findall_overlapping_helper(self, root, query, overlaps):
         """Internal recursive helper for overlap search"""
-        interval = Interval(i[0], i[1])
         if root is None:
-            return root
+            return
+
+        x_interval = Interval(query[0], query[1])
 
         # Check x-axis overlap
-        if root.interval.low <= interval.high and root.interval.high >= interval.low:
-            self.findall_overlapping_y_interval(root.y_tree.root, i, root.interval)
-
-        if root.left is None and root.right is None:
-            return root
+        if root.interval.low <= x_interval.high and root.interval.high >= x_interval.low:
+            self._findall_overlapping_y(root.y_tree.root, query, root.interval, overlaps)
 
         # Search left subtree
-        if root.left is None:
-            self._findall_overlapping_interval_helper(root.right, i)
-        elif interval.low > root.left.max:
-            self._findall_overlapping_interval_helper(root.right, i)
-        else:
-            self._findall_overlapping_interval_helper(root.left, i)
-            if interval.high >= root.interval.low:
-                self._findall_overlapping_interval_helper(root.right, i)
+        if root.left is not None and x_interval.low <= root.left.max:
+            self._findall_overlapping_helper(root.left, query, overlaps)
 
-        return root
+        # Search right subtree
+        if root.right is not None and x_interval.high >= root.interval.low:
+            self._findall_overlapping_helper(root.right, query, overlaps)
 
-    def findall_overlapping_y_interval(self, root, i, x_interval):
+    def _findall_overlapping_y(self, root, query, x_interval, overlaps):
         """Search y-tree for overlaps"""
-        interval = Interval(i[2], i[3])
         if root is None:
-            return root
+            return
+
+        y_interval = Interval(query[2], query[3])
 
         # Check y-axis overlap
-        if root.interval.low <= interval.high and root.interval.high >= interval.low:
-            self.overlaps.append([x_interval, root.interval])
+        if root.interval.low <= y_interval.high and root.interval.high >= y_interval.low:
+            overlaps.append((x_interval, root.interval))
 
-        if root.left is None and root.right is None:
-            return root
+        # Search left subtree
+        if root.left is not None and y_interval.low <= root.left.max:
+            self._findall_overlapping_y(root.left, query, x_interval, overlaps)
 
-        # Search y-tree
-        if root.left is None:
-            self.findall_overlapping_y_interval(root.right, i, x_interval)
-        elif interval.low > root.left.max:
-            self.findall_overlapping_y_interval(root.right, i, x_interval)
-        else:
-            self.findall_overlapping_y_interval(root.left, i, x_interval)
-            if interval.high >= root.interval.low:
-                self.findall_overlapping_y_interval(root.right, i, x_interval)
+        # Search right subtree
+        if root.right is not None and y_interval.high >= root.interval.low:
+            self._findall_overlapping_y(root.right, query, x_interval, overlaps)
 
-        return root
-
-    def find_overlapping_interval(self, root, i):
+    def find_overlapping(self, root, query):
         """
-        Find a single interval overlapping with query interval.
+        Find a single interval overlapping with query interval
 
         Args:
             root: Root of tree
-            i: Query interval [x_low, x_high, y_low, y_high]
+            query: Query interval [x_low, x_high, y_low, y_high]
 
         Returns:
-            The first overlapping interval found, or None if none exists.
+            First overlapping interval as (x_interval, y_interval) or None
         """
-        return self._find_overlapping_interval_helper(root, i)
+        return self._find_overlapping_helper(root, query)
 
-    def _find_overlapping_interval_helper(self, root, i):
+    def _find_overlapping_helper(self, root, query):
         """Internal recursive helper for finding a single overlap"""
         if root is None:
             return None
 
-        x_interval = Interval(i[0], i[1])
-        y_interval_bounds = i[2:4]
+        x_interval = Interval(query[0], query[1])
 
         # Check x-axis overlap
         if root.interval.low <= x_interval.high and root.interval.high >= x_interval.low:
-            # Check y-tree for overlap
-            overlap = self._find_overlapping_y_interval(root.y_tree.root, y_interval_bounds, root.interval)
+            overlap = self._find_overlapping_y(root.y_tree.root, query[2:4], root.interval)
             if overlap:
                 return overlap
 
-        # Decide which subtree to search
+        # Search left subtree
         if root.left is not None and x_interval.low <= root.left.max:
-            found = self._find_overlapping_interval_helper(root.left, i)
+            found = self._find_overlapping_helper(root.left, query)
             if found:
                 return found
 
-        return self._find_overlapping_interval_helper(root.right, i)
+        return self._find_overlapping_helper(root.right, query)
 
-    def _find_overlapping_y_interval(self, root, y_bounds, x_interval):
+    def _find_overlapping_y(self, root, y_bounds, x_interval):
         """Search y-tree for a single overlapping interval"""
         if root is None:
             return None
@@ -399,92 +370,27 @@ class IntervalTree:
 
         # Check y-axis overlap
         if root.interval.low <= y_interval.high and root.interval.high >= y_interval.low:
-            return [x_interval, root.interval]
+            return (x_interval, root.interval)
 
-        # Decide which subtree to search
+        # Search left subtree
         if root.left is not None and y_interval.low <= root.left.max:
-            found = self._find_overlapping_y_interval(root.left, y_bounds, x_interval)
+            found = self._find_overlapping_y(root.left, y_bounds, x_interval)
             if found:
                 return found
 
-        return self._find_overlapping_y_interval(root.right, y_bounds, x_interval)
+        return self._find_overlapping_y(root.right, y_bounds, x_interval)
 
     def update(self, intervals):
         """Batch insert multiple intervals"""
         for interval in intervals:
             self.root = self.insert(self.root, interval)
 
-    def visualize(self):
-        """Generate GraphViz visualization of tree structure"""
-        from graphviz import Digraph
-
-        def add_x_node(dot, root, parent=None, edge_label=""):
-            if root is None:
-                return
-            node_label = f"X: [{root.interval.low},{root.interval.high}]\\nmax={root.max}\\nh={root.height}"
-            dot.node(str(id(root)), node_label)
-            if parent is not None:
-                dot.edge(str(id(parent)), str(id(root)), label=edge_label)
-
-            add_y_nodes(dot, root.y_tree.root, root, "Y")
-            add_x_node(dot, root.left, root, "L")
-            add_x_node(dot, root.right, root, "R")
-
-        def add_y_nodes(dot, root, parent_x, edge_label=""):
-            if root is None:
-                return
-            node_label = f"Y: [{root.interval.low},{root.interval.high}]\\nmax={root.max}\\nh={root.height}"
-            dot.node(str(id(root)), node_label)
-            dot.edge(str(id(parent_x)), str(id(root)), label=edge_label)
-
-            add_y_nodes(dot, root.left, parent_x, "L")
-            add_y_nodes(dot, root.right, parent_x, "R")
-
-        dot = Digraph(comment="AVL Interval Tree")
-        add_x_node(dot, self.root)
-        dot.render("interval_tree", view=True)
-        return dot
-
 
 def print_overlaps(overlaps):
     """Print list of overlapping intervals"""
     for x_interval, y_interval in overlaps:
-        print(f"x({x_interval.low} {x_interval.high}) y({y_interval.low} {y_interval.high})")
-    print(f"Found: {len(overlaps)} overlaps")
-
-
-def collect_intervals_with_depth(node, depth=0):
-    """
-    Recursively collect all 2D intervals from the X-tree and Y-trees
-    along with depth (height in X-tree).
-    """
-    intervals = []
-    depths = []
-
-    if node is None:
-        return intervals, depths
-
-    # Traverse Y-tree for this X-node
-    def collect_y_intervals(y_node):
-        if y_node is None:
-            return []
-        result = [[node.interval.low, node.interval.high, y_node.interval.low, y_node.interval.high]]
-        result += collect_y_intervals(y_node.left)
-        result += collect_y_intervals(y_node.right)
-        return result
-
-    y_intervals = collect_y_intervals(node.y_tree.root)
-    intervals += y_intervals
-    depths += [depth] * len(y_intervals)
-
-    # Traverse left and right subtrees
-    left_intervals, left_depths = collect_intervals_with_depth(node.left, depth + 1)
-    right_intervals, right_depths = collect_intervals_with_depth(node.right, depth + 1)
-
-    intervals += left_intervals + right_intervals
-    depths += left_depths + right_depths
-
-    return intervals, depths
+        print(f"  x[{x_interval.low}, {x_interval.high}] × y[{y_interval.low}, {y_interval.high}]")
+    print(f"Total: {len(overlaps)} overlaps\n")
 
 
 if __name__ == "__main__":
@@ -492,60 +398,43 @@ if __name__ == "__main__":
     print("2D AVL Interval Tree - Example Usage")
     print("=" * 60)
 
-    # Create tree
-    tree = IntervalTree()
-
-    # Insert some rectangles
-    print("\nInserting intervals:")
+    # Create tree with rectangles
     intervals = [
         [0, 10, 0, 10],  # Large rectangle
         [5, 15, 5, 15],  # Overlapping rectangle
         [20, 30, 20, 30],  # Separate rectangle
-        [8, 12, 8, 12],  # Small rectangle inside others
+        [8, 12, 8, 12],  # Small rectangle
     ]
 
-    for interval in intervals:
-        print(f"  [{interval[0]},{interval[1]}] × [{interval[2]},{interval[3]}]")
-        tree.root = tree.insert(tree.root, interval)
+    tree = IntervalTree(intervals)
+    print(f"\nInserted {len(intervals)} rectangles")
 
-    # Query 1: Find overlaps with a region
-    print("\n" + "-" * 60)
-    print("Query 1: Find all rectangles overlapping [7, 11] × [7, 11]")
-    tree.findall_overlapping_interval(tree.root, [7, 11, 7, 11])
-    print_overlaps(tree.overlaps)
+    # Query 1: Find all overlaps
+    print("\nQuery: Find all rectangles overlapping [7, 11] × [7, 11]")
+    overlaps = tree.findall_overlapping(tree.root, [7, 11, 7, 11])
+    print_overlaps(overlaps)
 
-    # Query 2: Non-overlapping region
-    print("\n" + "-" * 60)
-    print("Query 2: Find all rectangles overlapping [25, 28] × [25, 28]")
-    tree.findall_overlapping_interval(tree.root, [25, 28, 25, 28])
-    print_overlaps(tree.overlaps)
+    # Query 2: Find single overlap
+    print("Query: Find one rectangle overlapping [25, 28] × [25, 28]")
+    overlap = tree.find_overlapping(tree.root, [25, 28, 25, 28])
+    if overlap:
+        x, y = overlap
+        print(f"  Found: x[{x.low}, {x.high}] × y[{y.low}, {y.high}]\n")
+    else:
+        print("  No overlap found\n")
 
     # Delete an interval
-    print("\n" + "-" * 60)
-    print("Deleting interval [20, 30] × [20, 30]")
+    print("Deleting rectangle [20, 30] × [20, 30]")
     tree.root = tree.delete(tree.root, [20, 30, 20, 30])
 
-    # Query again
-    print("Query 3: Search same region after deletion")
-    tree.findall_overlapping_interval(tree.root, [25, 28, 25, 28])
-    print_overlaps(tree.overlaps)
-    tree.visualize()
+    print("Query: Search same region after deletion")
+    overlap = tree.find_overlapping(tree.root, [25, 28, 25, 28])
+    if overlap:
+        x, y = overlap
+        print(f"  Found: x[{x.low}, {x.high}] × y[{y.low}, {y.high}]\n")
+    else:
+        print("  No overlap found\n")
 
-    # Tree statistics
-    from test_interval_tree import count_nodes, get_tree_height
-
-    print("\n" + "-" * 60)
-    print("Tree Statistics:")
-    print(f"  Total nodes: {count_nodes(tree.root)}")
-    print(f"  Tree height: {get_tree_height(tree.root)}")
-    print(f"  Root balance: {tree.get_balance(tree.root)}")
-
-    print("\n" + "=" * 60)
-    print("Example complete! Run test_interval_tree.py for comprehensive tests.")
     print("=" * 60)
-
-    from visualise_interval_tree import visualize_intervals_3d
-
-    intervals, depths = collect_intervals_with_depth(tree.root)
-    query = [5000, 5100, 5000, 5100]
-    visualize_intervals_3d(intervals, depths, query)
+    print("Run test_interval_tree.py for comprehensive tests")
+    print("=" * 60)
