@@ -1,8 +1,12 @@
 """
-AVL-Balanced 2D Interval Tree Implementation
+2D AVL Interval Tree Implementation (Nested Interval Trees)
 
 A self-balancing interval tree for efficient 2D rectangular region queries.
-Uses nested AVL trees to maintain O(log n) height on both axes.
+Uses nested AVL trees: x-axis as primary, y-axis as secondary.
+Each x-node contains a y-tree for intervals with that exact x-range.
+
+Space: O(n) - each rectangle stored once
+Query: O(log n + k) - augmented tree pruning enables efficient search
 """
 
 
@@ -40,10 +44,14 @@ class YNode:
 
 class IntervalTree:
     """
-    AVL-balanced 2D Interval Tree
+    AVL-balanced 2D Interval Tree (Nested Structure)
 
     Stores 2D rectangular regions and efficiently queries overlaps.
     Each interval is [x_low, x_high, y_low, y_high].
+
+    Implementation follows nested interval tree approach:
+    - Primary tree: x-intervals (augmented with max high value)
+    - Secondary trees: y-intervals for each unique x-interval
 
     Example:
         tree = IntervalTree()
@@ -60,7 +68,7 @@ class IntervalTree:
             intervals: Optional list of [x_low, x_high, y_low, y_high] intervals
         """
         self.root = None
-        self.overlaps = []  # Store results for legacy API compatibility
+        self.overlaps = []  # Store results for convenience
         if intervals is not None:
             for interval in intervals:
                 self.root = self.insert(self.root, interval)
@@ -81,7 +89,7 @@ class IntervalTree:
             node.height = 1 + max(self.get_height(node.left), self.get_height(node.right))
 
     def update_max(self, node):
-        """Update max value based on interval and children"""
+        """Update max value based on interval and children (for augmented tree)"""
         if node is None:
             return
         node.max = node.interval.high
@@ -148,13 +156,13 @@ class IntervalTree:
                 root.y_tree.root = root.y_tree.insert(root.y_tree.root, [y_interval.low, y_interval.high])
             return root
 
-        # BST insert
+        # BST insert based on low value
         if root.interval.low > interval.low:
             root.left = self.insert(root.left, i)
         else:
             root.right = self.insert(root.right, i)
 
-        # Update height and max
+        # Update height and max (augmented tree)
         self.update_height(root)
         self.update_max(root)
 
@@ -207,10 +215,11 @@ class IntervalTree:
             if isinstance(root, Node) and len(i) > 2:
                 old_y_root = root.y_tree.root
                 root.y_tree.root = self.delete(root.y_tree.root, i[2:])
-                if root.y_tree.root == old_y_root:
+                if root.y_tree.root != old_y_root:
+                    # Successfully deleted from y-tree, return without deleting x-node
                     return root
 
-            # Delete node
+            # Delete x-node if y-tree is empty or it's a y-node
             if root.left is None and root.right is None:
                 return None
             elif root.left is None:
@@ -218,7 +227,7 @@ class IntervalTree:
             elif root.right is None:
                 return root.left
             else:
-                # Two children: find successor
+                # Two children: find in-order successor
                 successor = root.right
                 while successor.left is not None:
                     successor = successor.left
@@ -236,12 +245,7 @@ class IntervalTree:
                 else:
                     root.right = self.delete(
                         root.right,
-                        [
-                            successor.interval.low,
-                            successor.interval.high,
-                            successor.interval.low,
-                            successor.interval.high,
-                        ],
+                        [successor.interval.low, successor.interval.high],
                     )
 
         if root is None:
@@ -278,38 +282,44 @@ class IntervalTree:
         """
         Find all intervals overlapping with query interval
 
+        Uses augmented tree property (max values) to prune search space.
+
         Args:
             root: Root of tree
             query: Query interval [x_low, x_high, y_low, y_high]
 
         Returns:
             List of overlapping intervals as (x_interval, y_interval) tuples
+            Also stores result in self.overlaps for convenience
         """
         overlaps = []
         self._findall_overlapping_helper(root, query, overlaps)
+        self.overlaps = overlaps
         return overlaps
 
     def _findall_overlapping_helper(self, root, query, overlaps):
-        """Internal recursive helper for overlap search"""
+        """Internal recursive helper for overlap search with pruning"""
         if root is None:
             return
 
         x_interval = Interval(query[0], query[1])
 
-        # Check x-axis overlap
+        # Check x-axis overlap: A.low <= B.high AND A.high >= B.low
         if root.interval.low <= x_interval.high and root.interval.high >= x_interval.low:
+            # X-intervals overlap, check y-tree
             self._findall_overlapping_y(root.y_tree.root, query, root.interval, overlaps)
 
-        # Search left subtree
+        # Pruning using augmented max value:
+        # Skip left subtree if query.low > left.max (no intervals can overlap)
         if root.left is not None and x_interval.low <= root.left.max:
             self._findall_overlapping_helper(root.left, query, overlaps)
 
-        # Search right subtree
+        # Always search right if query.high >= node.low
         if root.right is not None and x_interval.high >= root.interval.low:
             self._findall_overlapping_helper(root.right, query, overlaps)
 
     def _findall_overlapping_y(self, root, query, x_interval, overlaps):
-        """Search y-tree for overlaps"""
+        """Search y-tree for overlaps with pruning"""
         if root is None:
             return
 
@@ -319,11 +329,10 @@ class IntervalTree:
         if root.interval.low <= y_interval.high and root.interval.high >= y_interval.low:
             overlaps.append((x_interval, root.interval))
 
-        # Search left subtree
+        # Pruning for y-tree
         if root.left is not None and y_interval.low <= root.left.max:
             self._findall_overlapping_y(root.left, query, x_interval, overlaps)
 
-        # Search right subtree
         if root.right is not None and y_interval.high >= root.interval.low:
             self._findall_overlapping_y(root.right, query, x_interval, overlaps)
 
@@ -353,7 +362,7 @@ class IntervalTree:
             if overlap:
                 return overlap
 
-        # Search left subtree
+        # Search left subtree with pruning
         if root.left is not None and x_interval.low <= root.left.max:
             found = self._find_overlapping_helper(root.left, query)
             if found:
@@ -372,7 +381,7 @@ class IntervalTree:
         if root.interval.low <= y_interval.high and root.interval.high >= y_interval.low:
             return (x_interval, root.interval)
 
-        # Search left subtree
+        # Search left subtree with pruning
         if root.left is not None and y_interval.low <= root.left.max:
             found = self._find_overlapping_y(root.left, y_bounds, x_interval)
             if found:
@@ -395,7 +404,7 @@ def print_overlaps(overlaps):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("2D AVL Interval Tree - Example Usage")
+    print("2D AVL Interval Tree - Nested Structure")
     print("=" * 60)
 
     # Create tree with rectangles
