@@ -3,6 +3,7 @@
 This project is a from-scratch Python implementation of a self-balancing 2D Interval Tree using Augmented AVL Tree. It is designed to efficiently store and query 2D rectangular regions (e.g., `[x_low, x_high, y_low, y_high]`) for overlaps.
 
 The data structure uses nested AVL trees to maintain balance, ensuring that insertion, deletion, and query operations have a time complexity of **O(log n + k)**, where `n` is the number of intervals stored and `k` is the number of reported overlaps.
+
 This 2D implementation builds on that by:
 1. Creating a primary Interval Tree based on the **x-intervals** of the rectangles.
 2. For each unique x-interval in the tree, creating a secondary Interval Tree to store all **y-intervals** that share that same x-interval.
