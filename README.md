@@ -1,4 +1,4 @@
-# 2D AVL Interval Tree
+# 2D Interval Tree (AVL-Augmented, Self-Balancing)
 
 This project is a from-scratch Python implementation of a self-balancing 2D Interval Tree using Augmented AVL Tree. It is designed to efficiently store and query 2D rectangular regions (e.g., `[x_low, x_high, y_low, y_high]`) for overlaps.
 
